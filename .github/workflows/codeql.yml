@@ -1,10 +1,14 @@
-# Reusable CodeQL analysis for Kotlin repos. Kotlin needs a real (traced) compilation,
-# so the build runs without daemon, build cache or configuration cache.
+# Reusable CodeQL analysis. Kotlin needs a real (traced) compilation, so the build runs without
+# daemon, build cache or configuration cache; JavaScript/TypeScript is analysed without a build.
 name: codeql
 
 on:
   workflow_call:
     inputs:
+      language:
+        description: CodeQL language, java-kotlin or javascript-typescript
+        type: string
+        default: java-kotlin
       checkout-platform:
         description: Check out nothingeats-kotlin-platform next to the repo (false for the platform itself)
         type: boolean
@@ -27,25 +31,27 @@ jobs:
         with:
           path: repo
           persist-credentials: false
-      - if: inputs.checkout-platform
+      - if: inputs.language == 'java-kotlin' && inputs.checkout-platform
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: slashncode/nothingeats-kotlin-platform
           ref: ${{ inputs.platform-ref }}
           path: nothingeats-kotlin-platform
           persist-credentials: false
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+      - if: inputs.language == 'java-kotlin'
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: "25"
       - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
-          languages: java-kotlin
-          build-mode: manual
+          languages: ${{ inputs.language }}
+          build-mode: ${{ inputs.language == 'java-kotlin' && 'manual' || 'none' }}
           source-root: repo
       - name: Compile
+        if: inputs.language == 'java-kotlin'
         working-directory: repo
         run: ./gradlew compileKotlin compileTestKotlin --no-daemon --no-build-cache --no-configuration-cache --console=plain
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
-          category: /language:java-kotlin
+          category: /language:${{ inputs.language }}

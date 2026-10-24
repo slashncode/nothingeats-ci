@@ -35,6 +35,26 @@
       "description": "Exposed modules move together",
       "matchPackageNames": ["org.jetbrains.exposed:**"],
       "groupName": "exposed"
+    },
+    {
+      "description": "React Aria packages move together (soren-ui's upgrade rule)",
+      "matchPackageNames": ["react-aria", "react-aria-components", "react-stately", "@internationalized/**", "@react-types/**"],
+      "groupName": "react aria"
+    },
+    {
+      "description": "Storybook packages move together",
+      "matchPackageNames": ["storybook", "@storybook/**", "eslint-plugin-storybook"],
+      "groupName": "storybook"
+    },
+    {
+      "description": "Vitest packages move together",
+      "matchPackageNames": ["vitest", "@vitest/**"],
+      "groupName": "vitest"
+    },
+    {
+      "description": "TypeScript stays below 6.1 until typescript-eslint supports newer versions",
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<6.1.0"
     }
   ]
 }

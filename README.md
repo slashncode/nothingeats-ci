@@ -8,7 +8,8 @@ Reusable GitHub Actions workflows and the shared Renovate preset for every [Noth
 |---|---|---|
 | [`kotlin.yml`](.github/workflows/kotlin.yml) | Build, ktlint and tests (Testcontainers); `verify-image` also builds the image tarball. On `main`: Gradle dependency graph submission. | Kotlin platform, Kotlin services, service template |
 | [`kotlin-image.yml`](.github/workflows/kotlin-image.yml) | Multi-arch Jib image pushed to GHCR, signed with cosign (keyless), SPDX SBOM attestation. Tags `main-<sha>-<unix time>` for Flux image policies. Separate workflow so callers without images never grant `packages`/`id-token`. | Kotlin services |
-| [`codeql.yml`](.github/workflows/codeql.yml) | CodeQL for Java/Kotlin with a traced build | Kotlin repos |
+| [`codeql.yml`](.github/workflows/codeql.yml) | CodeQL; `language: java-kotlin` (default, traced build) or `javascript-typescript` (no build) | every code repo |
+| [`pnpm.yml`](.github/workflows/pnpm.yml) | `pnpm install --frozen-lockfile`, then the repo's `lint`, `typecheck`, `test` and `build` scripts; `browser-tests` installs Chromium for Vitest browser mode | nothingeats-ui, web apps |
 | [`pr-hygiene.yml`](.github/workflows/pr-hygiene.yml) | Conventional-commit PR titles, dependency review (fails on high severity) | every repo |
 
 All third-party actions are pinned to commit SHAs; Renovate keeps the pins current.
