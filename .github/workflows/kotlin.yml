@@ -2,8 +2,9 @@
 #
 # - build: compile, ktlint, tests (Testcontainers) on every push and pull request
 # - dependencies: submits the Gradle dependency graph on main (feeds dependency review)
-# - image: on main, builds the multi-arch image with Jib, pushes it to GHCR,
-#   signs it with cosign (keyless) and attaches an SPDX SBOM attestation
+#
+# Images are built by kotlin-image.yml, a separate workflow so callers that never push
+# an image (the platform) do not have to grant packages or id-token permissions.
 #
 # The platform is consumed as a composite build: it is checked out next to the repo,
 # exactly like in the local workspace.
@@ -22,10 +23,6 @@ on:
         default: main
       verify-image:
         description: Build the image as a tarball on every run, without pushing (template)
-        type: boolean
-        default: false
-      push-image:
-        description: Push, sign and attest the image on main (services)
         type: boolean
         default: false
 
@@ -59,10 +56,11 @@ jobs:
       - name: Build and test
         working-directory: repo
         run: ./gradlew build --console=plain
+      # A tarball can only hold one platform; the multi-arch push happens in kotlin-image.yml.
       - name: Build image tarball
         if: inputs.verify-image
         working-directory: repo
-        run: ./gradlew :app:jibBuildTar --console=plain
+        run: ./gradlew :app:jibBuildTar --console=plain -Djib.from.platforms=linux/amd64
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -95,73 +93,3 @@ jobs:
       - uses: gradle/actions/dependency-submission@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           build-root-directory: repo
-
-  image:
-    if: inputs.push-image && github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    env:
-      IMAGE: ghcr.io/${{ github.repository }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: repo
-          persist-credentials: false
-      - if: inputs.checkout-platform
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: slashncode/nothingeats-kotlin-platform
-          ref: ${{ inputs.platform-ref }}
-          path: nothingeats-kotlin-platform
-          persist-credentials: false
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
-        with:
-          distribution: temurin
-          java-version: ${{ env.JAVA_VERSION }}
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
-      - name: Log in to GHCR
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-      # Tag format main-<sha>-<unix time>: Flux image policies sort by the timestamp.
-      - name: Compute tag
-        id: tag
-        run: echo "tag=main-${GITHUB_SHA::7}-$(date +%s)" >> "$GITHUB_OUTPUT"
-      - name: Build and push with Jib
-        working-directory: repo
-        env:
-          TAG: ${{ steps.tag.outputs.tag }}
-        run: ./gradlew :app:jib --console=plain "-Djib.to.image=$IMAGE:$TAG"
-      - name: Read digest
-        id: digest
-        run: echo "digest=$(cat repo/app/build/jib-image.digest)" >> "$GITHUB_OUTPUT"
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-      - name: Sign image
-        env:
-          REF: ${{ env.IMAGE }}@${{ steps.digest.outputs.digest }}
-        run: cosign sign --yes "$REF"
-      - uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-        with:
-          image: ${{ env.IMAGE }}@${{ steps.digest.outputs.digest }}
-          format: spdx-json
-          output-file: sbom.spdx.json
-          upload-artifact: false
-      - name: Attest SBOM
-        env:
-          REF: ${{ env.IMAGE }}@${{ steps.digest.outputs.digest }}
-        run: cosign attest --yes --type spdxjson --predicate sbom.spdx.json "$REF"
-      - name: Summary
-        env:
-          TAG: ${{ steps.tag.outputs.tag }}
-          DIGEST: ${{ steps.digest.outputs.digest }}
-        run: |
-          {
-            echo "### Image"
-            echo "\`$IMAGE:$TAG\`"
-            echo
-            echo "Digest \`$DIGEST\`, signed with cosign, SBOM attested."
-          } >> "$GITHUB_STEP_SUMMARY"

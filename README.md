@@ -6,13 +6,14 @@ Reusable GitHub Actions workflows and the shared Renovate preset for every [Noth
 
 | Workflow | What it does | Used by |
 |---|---|---|
-| [`kotlin.yml`](.github/workflows/kotlin.yml) | Build, ktlint and tests (Testcontainers). On `main`: Gradle dependency graph submission and, with `push-image`, a multi-arch Jib image pushed to GHCR, signed with cosign (keyless) and attested with an SPDX SBOM. Image tags are `main-<sha>-<unix time>` for Flux image policies. | Kotlin platform, Kotlin services, service template |
+| [`kotlin.yml`](.github/workflows/kotlin.yml) | Build, ktlint and tests (Testcontainers); `verify-image` also builds the image tarball. On `main`: Gradle dependency graph submission. | Kotlin platform, Kotlin services, service template |
+| [`kotlin-image.yml`](.github/workflows/kotlin-image.yml) | Multi-arch Jib image pushed to GHCR, signed with cosign (keyless), SPDX SBOM attestation. Tags `main-<sha>-<unix time>` for Flux image policies. Separate workflow so callers without images never grant `packages`/`id-token`. | Kotlin services |
 | [`codeql.yml`](.github/workflows/codeql.yml) | CodeQL for Java/Kotlin with a traced build | Kotlin repos |
 | [`pr-hygiene.yml`](.github/workflows/pr-hygiene.yml) | Conventional-commit PR titles, dependency review (fails on high severity) | every repo |
 
 All third-party actions are pinned to commit SHAs; Renovate keeps the pins current.
 
-Kotlin repos are built against the platform as a **composite build**: `kotlin.yml` checks out `nothingeats-kotlin-platform` next to the repo, the same layout as the local workspace. Inputs: `checkout-platform` (false for the platform itself), `platform-ref` (default `main`), `verify-image`, `push-image`.
+Kotlin repos are built against the platform as a **composite build**: `kotlin.yml` checks out `nothingeats-kotlin-platform` next to the repo, the same layout as the local workspace. Inputs: `checkout-platform` (false for the platform itself), `platform-ref` (default `main`), `verify-image`.
 
 ### Example caller (a service)
 
@@ -30,10 +31,14 @@ jobs:
     uses: slashncode/nothingeats-ci/.github/workflows/kotlin.yml@main
     permissions:
       contents: write   # dependency graph submission
+  image:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: kotlin
+    uses: slashncode/nothingeats-ci/.github/workflows/kotlin-image.yml@main
+    permissions:
+      contents: read
       packages: write   # GHCR
       id-token: write   # cosign keyless signing
-    with:
-      push-image: true
   codeql:
     uses: slashncode/nothingeats-ci/.github/workflows/codeql.yml@main
     permissions:
