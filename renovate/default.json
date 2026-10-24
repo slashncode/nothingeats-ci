@@ -1,0 +1,40 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Shared Renovate preset for every NothingEats repo",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "Europe/Berlin",
+  "schedule": ["before 7am on monday"],
+  "prConcurrentLimit": 10,
+  "packageRules": [
+    {
+      "description": "GitHub Actions updates in one PR, merged automatically once CI is green",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions",
+      "automerge": true
+    },
+    {
+      "description": "Patch updates are merged automatically once CI is green",
+      "matchUpdateTypes": ["patch", "digest"],
+      "automerge": true
+    },
+    {
+      "description": "Kotlin, KSP and the Kotlin Gradle plugins move together",
+      "matchPackageNames": ["org.jetbrains.kotlin:**", "com.google.devtools.ksp:**", "com.google.devtools.ksp"],
+      "groupName": "kotlin"
+    },
+    {
+      "description": "Ktor modules move together",
+      "matchPackageNames": ["io.ktor:**"],
+      "groupName": "ktor"
+    },
+    {
+      "description": "Exposed modules move together",
+      "matchPackageNames": ["org.jetbrains.exposed:**"],
+      "groupName": "exposed"
+    }
+  ]
+}
