@@ -17,6 +17,10 @@ on:
         description: Git ref of nothingeats-kotlin-platform to build against
         type: string
         default: main
+      checkout-repos:
+        description: Other NothingEats repos to check out next to this one (composite builds of their gRPC contracts), space-separated
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -38,6 +42,14 @@ jobs:
           ref: ${{ inputs.platform-ref }}
           path: nothingeats-kotlin-platform
           persist-credentials: false
+      - name: Check out contract repos
+        if: inputs.language == 'java-kotlin' && inputs.checkout-repos != ''
+        env:
+          REPOS: ${{ inputs.checkout-repos }}
+        run: |
+          for repo in $REPOS; do
+            git clone --depth 1 "https://github.com/slashncode/${repo}.git" "${repo}"
+          done
       - if: inputs.language == 'java-kotlin'
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
