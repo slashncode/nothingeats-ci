@@ -1,0 +1,42 @@
+# Reusable workflow for repos that own a gRPC contract (a buf module, buf.yaml at the repo root):
+# - lint: buf's STANDARD rules (naming, packages, versioned services)
+# - breaking: no wire- or source-breaking change against the base branch (pull request) or the
+#   previous commit (main). Consumers build against main, so a breaking change must be a new
+#   package version (nothingeats.<context>.v2), never an edit of v1.
+name: buf
+
+on:
+  workflow_call:
+
+permissions: {}
+
+env:
+  BUF_VERSION: "1.75.0"
+  BUF_SHA256: fad1e38d6909bbb583a4da81d8c02a01046e2cd663bde7e337dd24277393764b
+
+jobs:
+  buf:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install buf
+        run: |
+          curl -sSfL -o /usr/local/bin/buf "https://github.com/bufbuild/buf/releases/download/v${BUF_VERSION}/buf-Linux-x86_64"
+          echo "${BUF_SHA256}  /usr/local/bin/buf" | sha256sum --check
+          chmod +x /usr/local/bin/buf
+      - name: Lint
+        run: buf lint
+      - name: Breaking changes
+        env:
+          AGAINST: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'HEAD~1' }}
+        run: |
+          if git cat-file -e "${AGAINST}:buf.yaml" 2>/dev/null; then
+            buf breaking --against ".git#ref=${AGAINST}"
+          else
+            echo "No buf module in ${AGAINST} yet, nothing to compare."
+          fi
