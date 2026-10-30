@@ -82,7 +82,8 @@ jobs:
           retention-days: 7
 
   dependencies:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # main only; a manual run (workflow_dispatch) submits too, e.g. after a platform update.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
