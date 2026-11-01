@@ -1,5 +1,5 @@
 # Reusable workflow for pnpm repos that ship an image (web apps, Node services): runs the repo's
-# `pnpm build` (web apps against nothingeats-ui from a sibling checkout, `checkout-ui`), packs the
+# `pnpm build` and, if defined, `pnpm image:prepare` (web apps against nothingeats-ui from a sibling checkout, `checkout-ui`), packs the
 # output into the repo's Dockerfile (no RUN steps, so no emulation for arm64), pushes a multi-arch
 # image to GHCR, signs it with cosign (keyless) and attaches an SPDX SBOM attestation.
 # Callers run it on main after pnpm.yml succeeded (`needs:`).
@@ -63,6 +63,10 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm build
+      # Repos whose image ships node_modules (e.g. the backoffice) trim them here, after the build.
+      - name: Prepare the image's files
+        working-directory: repo
+        run: pnpm run --if-present image:prepare
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to GHCR
         env:
