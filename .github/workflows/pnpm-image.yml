@@ -1,7 +1,8 @@
 # Reusable workflow for pnpm repos that ship an image (web apps, Node services): runs the repo's
 # `pnpm build` and, if defined, `pnpm image:prepare` (web apps against nothingeats-ui from a sibling checkout, `checkout-ui`), packs the
 # output into the repo's Dockerfile (no RUN steps, so no emulation for arm64), pushes a multi-arch
-# image to GHCR, signs it with cosign (keyless) and attaches an SPDX SBOM attestation.
+# image to GHCR, signs it with cosign (keyless), attaches an SPDX SBOM attestation, and only then
+# gives it the release tag Flux deploys.
 # Callers run it on main after pnpm.yml succeeded (`needs:`).
 name: pnpm-image
 
@@ -72,10 +73,14 @@ jobs:
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: echo "$TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-      # Tag format main-<sha>-<unix time>: Flux image policies sort by the timestamp.
-      - name: Compute tag
+      # Release tag main-<sha>-<unix time>: Flux image policies take the newest by its timestamp,
+      # so only a signed image may carry one. The build pushes under a staging tag the policies
+      # ignore; the release tag is added to the same digest once signature and SBOM are in place.
+      - name: Compute tags
         id: tag
-        run: echo "tag=main-${GITHUB_SHA::7}-$(date +%s)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "tag=main-${GITHUB_SHA::7}-$(date +%s)" >> "$GITHUB_OUTPUT"
+          echo "staging=build-${GITHUB_SHA::7}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
       - name: Build and push
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -84,7 +89,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: false
-          tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+          tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.staging }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -104,6 +109,16 @@ jobs:
         env:
           REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
         run: cosign attest --yes --type spdxjson --predicate sbom.spdx.json "$REF"
+      - uses: imjasonh/setup-crane@feee3b6bb0d4c68370f256a4502498c9227e5c6b # v0.7
+        with:
+          version: v0.22.1
+      # A new tag on the same manifest: crane writes the stored bytes again, so the digest (and with
+      # it the signature) stays the same.
+      - name: Release tag
+        env:
+          REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: crane tag "$REF" "$TAG"
       - name: Summary
         env:
           TAG: ${{ steps.tag.outputs.tag }}
