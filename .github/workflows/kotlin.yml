@@ -128,3 +128,7 @@ jobs:
       - uses: gradle/actions/dependency-submission@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           build-root-directory: repo
+          # With the configuration cache, resolving every build of a nested composite (service →
+          # platform → posthog-ktor, each with its own build-logic) fails inside Gradle ("Builds are
+          # not stored in ascending base node id order"). The build job keeps the cache.
+          additional-arguments: --no-configuration-cache
